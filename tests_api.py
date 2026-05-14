@@ -10,9 +10,7 @@ class ApiTestCase(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
         self.store_path = Path(self.temp_dir.name) / "store.json"
-        app = create_app(
-            {"TESTING": True, "DATA_STORE_PATH": self.store_path, "ENABLE_ADMIN_ENDPOINTS": False}
-        )
+        app = create_app({"TESTING": True, "DATA_STORE_PATH": self.store_path})
         self.client = app.test_client()
 
     def tearDown(self) -> None:
@@ -63,7 +61,7 @@ class ApiTestCase(unittest.TestCase):
     def _load_store(self) -> dict:
         return json.loads(self.store_path.read_text(encoding="utf-8"))
 
-    def test_public_dataset_mutation_endpoints_are_disabled(self) -> None:
+    def test_public_dataset_mutation_endpoints_are_not_implemented(self) -> None:
         self._seed_store()
 
         create_response = self.client.post(
@@ -87,7 +85,7 @@ class ApiTestCase(unittest.TestCase):
             "Court order metadata.",
         )
 
-    def test_public_record_mutation_endpoints_are_disabled(self) -> None:
+    def test_public_record_mutation_endpoints_are_not_implemented(self) -> None:
         self._seed_store(record_count=1)
 
         create_response = self.client.post(

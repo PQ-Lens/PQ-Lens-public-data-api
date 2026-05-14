@@ -235,7 +235,7 @@ Returns currently advertised language codes.
 
 ## Dataset endpoints
 
-The public API exposes dataset retrieval only. Dataset create, update, and delete routes are disabled by default so public users cannot alter the corpus.
+The public API exposes dataset retrieval only. Dataset create, update, and delete routes are not implemented so public users cannot alter the corpus through the API.
 
 ### `GET /datasets`
 List all datasets.
@@ -247,7 +247,7 @@ Get one dataset.
 
 ## Record endpoints
 
-The public API exposes record retrieval only. Record create, update, and delete routes are disabled by default so public users cannot alter dataset contents.
+The public API exposes record retrieval only. Record create, update, and delete routes are not implemented so public users cannot alter dataset contents through the API.
 
 ### `GET /datasets/<dataset_id>/records`
 List records with optional filtering, ordering, and cursor pagination.
@@ -301,17 +301,15 @@ Behavior:
 
 ## Internal data import
 
-The public API is read-only by default. Use `scripts/import_bilingual_xlsx.py` only against an internal/admin instance that has write endpoints explicitly enabled with `ENABLE_ADMIN_ENDPOINTS=true`. The API must be running before you execute the importer.
+The public API does not provide create, update, or delete endpoints. Use `scripts/import_bilingual_xlsx.py` as an offline/internal data-preparation tool that writes the JSON store directly before the public API is started.
 
 ```bash
-ENABLE_ADMIN_ENDPOINTS=true python app.py
-
 python scripts/import_bilingual_xlsx.py \
-  --base-url http://localhost:5000 \
-  --xlsx bilingual.xlsx
+  --xlsx bilingual.xlsx \
+  --store-path data_store.json
 ```
 
-Against an internal/admin instance, the importer creates or updates the `court_orders_bilingual` dataset using this metadata:
+The importer creates or updates the `court_orders_bilingual` dataset in the JSON store using this metadata:
 
 - **Summary**: A bilingual legal-text dataset derived from Court Notices published on the Government of Malta website. It contains parallel Maltese–English text pairs extracted from court notice PDFs and converted into structured text format.
 - **Description**: This dataset contains Court Notices from the Government of Malta website (gov.mt). It contains Maltese–English pairs for each court notice. The original dataset format was PDF text; these extracts have been converted into structured text pairs in both Maltese and English. The dataset contains 2,310 rows of data. The latest record date is 7 May 2026, and the earliest record date is 22 November 2022. The dataset is suitable for Maltese–English and English–Maltese machine translation tasks, legal NLP research tasks, and bilingual legal language analysis.
@@ -321,7 +319,7 @@ Against an internal/admin instance, the importer creates or updates the `court_o
 - **Target language**: `mlt_Latn`
 - **Language pair**: `eng_Latn-mlt_Latn`
 
-For each worksheet row, the importer stores the English text in the record `text` field and the Maltese text in `translation_metadata.target_text`. It treats duplicate dataset or record responses as already imported, making repeated runs safe. After insertion, it fetches all records from `/datasets/court_orders_bilingual/records` and verifies that every expected row exists with the required language, language-pair, provenance, translation, and row-number metadata.
+For each worksheet row, the importer stores the English text in the record `text` field and the Maltese text in `translation_metadata.target_text`. It treats existing records as already imported, making repeated runs safe. After writing `data_store.json`, it verifies that every expected row exists with the required language, language-pair, provenance, translation, and row-number metadata.
 
 ---
 
@@ -376,7 +374,7 @@ Common status codes:
 
 - `400` invalid input
 - `404` not found
-- `405` method not allowed for disabled public mutation routes
+- `405` method not allowed for non-implemented mutation methods on public routes
 - `500` unexpected server error
 
 ---
@@ -391,7 +389,7 @@ python -m unittest -v
 
 Current tests validate:
 
-- public dataset and record mutation routes are disabled
+- public dataset and record mutation routes are not implemented
 - natural ordering defaults
 - shuffle reproducibility with seed
 - disjoint split behavior

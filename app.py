@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import json
-import os
 import random
-import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -13,11 +11,6 @@ from werkzeug.exceptions import HTTPException
 
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_STORE_PATH = BASE_DIR / "data_store.json"
-NLLB_TAG_PATTERN = re.compile(r"^[a-z]{3}_[A-Z][a-z]{3}$")
-
-LANGUAGE_MODES = {"monolingual", "bilingual_aligned", "multilingual"}
-SYNTHETIC_STATUS = {"non_synthetic", "partly_synthetic", "fully_synthetic", "unknown"}
-SOURCE_TYPES = {"web", "api", "file", "ocr_archive", "manual_entry", "other"}
 ORDERS = {"natural", "shuffle"}
 
 
@@ -82,65 +75,9 @@ def parse_optional_int(name: str) -> int | None:
         raise ApiError(f"{name} must be an integer", 400) from exc
 
 
-def validate_provenance(payload: dict[str, Any], *, require_source_text_for_ocr: bool = True) -> None:
-    source_url = payload.get("source_url")
-    source_text = payload.get("source_text")
-    source_type = payload.get("source_type")
-
-    if not source_url and not source_text:
-        raise ApiError("provenance must include source_url or source_text", 400)
-
-    if source_type and source_type not in SOURCE_TYPES:
-        raise ApiError(f"Invalid provenance.source_type: {source_type}", 400)
-
-    if require_source_text_for_ocr and source_type == "ocr_archive" and not source_text:
-        raise ApiError("provenance.source_text is required when source_type is ocr_archive", 400)
-
-
-def validate_dataset_payload(payload: dict[str, Any], *, partial: bool = False) -> None:
-    required = [] if partial else ["id", "summary", "language_mode", "synthetic_status", "provenance"]
-    for key in required:
-        if key not in payload:
-            raise ApiError(f"Missing required field: {key}", 400)
-
-    if "language_mode" in payload and payload["language_mode"] not in LANGUAGE_MODES:
-        raise ApiError("Invalid language_mode", 400, {"allowed": sorted(LANGUAGE_MODES)})
-
-    if "synthetic_status" in payload and payload["synthetic_status"] not in SYNTHETIC_STATUS:
-        raise ApiError("Invalid synthetic_status", 400, {"allowed": sorted(SYNTHETIC_STATUS)})
-
-    provenance = payload.get("provenance")
-    if provenance is not None:
-        if not isinstance(provenance, dict):
-            raise ApiError("provenance must be an object", 400)
-        validate_provenance(provenance)
-
-
-def validate_record_payload(payload: dict[str, Any], *, partial: bool = False) -> None:
-    required = [] if partial else ["id", "text", "language", "provenance"]
-    for key in required:
-        if key not in payload:
-            raise ApiError(f"Missing required field: {key}", 400)
-
-    if "language" in payload:
-        language = payload["language"]
-        if not isinstance(language, str) or not NLLB_TAG_PATTERN.match(language):
-            raise ApiError("language must use NLLB format such as 'eng_Latn'", 400)
-
-    if "synthetic_status" in payload and payload["synthetic_status"] not in SYNTHETIC_STATUS:
-        raise ApiError("Invalid synthetic_status", 400, {"allowed": sorted(SYNTHETIC_STATUS)})
-
-    provenance = payload.get("provenance")
-    if provenance is not None:
-        if not isinstance(provenance, dict):
-            raise ApiError("provenance must be an object", 400)
-        validate_provenance(provenance)
-
-
 def create_app(config: dict[str, Any] | None = None) -> Flask:
     app = Flask(__name__)
-    admin_endpoints_enabled = os.environ.get("ENABLE_ADMIN_ENDPOINTS", "").lower() in {"1", "true", "yes"}
-    app.config.update({"DATA_STORE_PATH": DEFAULT_STORE_PATH, "ENABLE_ADMIN_ENDPOINTS": admin_endpoints_enabled})
+    app.config.update({"DATA_STORE_PATH": DEFAULT_STORE_PATH})
     if config:
         app.config.update(config)
 
@@ -188,34 +125,6 @@ def create_app(config: dict[str, Any] | None = None) -> Flask:
         datasets = list(state["datasets"].values())
         return jsonify({"datasets": datasets, "count": len(datasets)})
 
-    if app.config["ENABLE_ADMIN_ENDPOINTS"]:
-        @app.post("/datasets")
-        def create_dataset() -> Any:
-            payload = request.get_json(silent=True) or {}
-            validate_dataset_payload(payload)
-
-            state = store.load()
-            dataset_id = payload["id"]
-            if dataset_id in state["datasets"]:
-                raise ApiError(f"Dataset '{dataset_id}' already exists", 409)
-
-            dataset = {
-                "id": dataset_id,
-                "summary": payload["summary"],
-                "description": payload.get("description", ""),
-                "language_mode": payload["language_mode"],
-                "synthetic_status": payload["synthetic_status"],
-                "synthetic_details": payload.get("synthetic_details", {}),
-                "provenance": payload["provenance"],
-                "created_at": utc_now(),
-                "updated_at": utc_now(),
-            }
-
-            state["datasets"][dataset_id] = dataset
-            state["records"].setdefault(dataset_id, {})
-            store.save(state)
-            return jsonify({"dataset": dataset}), 201
-
     @app.get("/datasets/<dataset_id>")
     def get_dataset(dataset_id: str) -> Any:
         state = store.load()
@@ -224,36 +133,6 @@ def create_app(config: dict[str, Any] | None = None) -> Flask:
             raise ApiError(f"Dataset '{dataset_id}' not found", 404)
         return jsonify({"dataset": dataset})
 
-    if app.config["ENABLE_ADMIN_ENDPOINTS"]:
-        @app.patch("/datasets/<dataset_id>")
-        def update_dataset(dataset_id: str) -> Any:
-            payload = request.get_json(silent=True) or {}
-            validate_dataset_payload(payload, partial=True)
-
-            state = store.load()
-            dataset = state["datasets"].get(dataset_id)
-            if not dataset:
-                raise ApiError(f"Dataset '{dataset_id}' not found", 404)
-
-            protected = {"id", "created_at"}
-            for key, value in payload.items():
-                if key in protected:
-                    continue
-                dataset[key] = value
-            dataset["updated_at"] = utc_now()
-            store.save(state)
-            return jsonify({"dataset": dataset})
-
-        @app.delete("/datasets/<dataset_id>")
-        def delete_dataset(dataset_id: str) -> Any:
-            state = store.load()
-            if dataset_id not in state["datasets"]:
-                raise ApiError(f"Dataset '{dataset_id}' not found", 404)
-            del state["datasets"][dataset_id]
-            state["records"].pop(dataset_id, None)
-            store.save(state)
-            return jsonify({"deleted": True, "dataset_id": dataset_id})
-
     def get_dataset_or_404(dataset_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
         state = store.load()
         dataset = state["datasets"].get(dataset_id)
@@ -261,34 +140,6 @@ def create_app(config: dict[str, Any] | None = None) -> Flask:
             raise ApiError(f"Dataset '{dataset_id}' not found", 404)
         records_map = state["records"].setdefault(dataset_id, {})
         return state, records_map
-
-    if app.config["ENABLE_ADMIN_ENDPOINTS"]:
-        @app.post("/datasets/<dataset_id>/records")
-        def create_record(dataset_id: str) -> Any:
-            payload = request.get_json(silent=True) or {}
-            validate_record_payload(payload)
-
-            state, records_map = get_dataset_or_404(dataset_id)
-            record_id = payload["id"]
-            if record_id in records_map:
-                raise ApiError(f"Record '{record_id}' already exists", 409)
-
-            record = {
-                "id": record_id,
-                "dataset_id": dataset_id,
-                "text": payload["text"],
-                "language": payload["language"],
-                "language_pair": payload.get("language_pair"),
-                "synthetic_status": payload.get("synthetic_status", "unknown"),
-                "translation_metadata": payload.get("translation_metadata", {}),
-                "provenance": payload["provenance"],
-                "attributes": payload.get("attributes", {}),
-                "created_at": utc_now(),
-                "updated_at": utc_now(),
-            }
-            records_map[record_id] = record
-            store.save(state)
-            return jsonify({"record": record}), 201
 
     @app.get("/datasets/<dataset_id>/records")
     def list_records(dataset_id: str) -> Any:
@@ -343,35 +194,6 @@ def create_app(config: dict[str, Any] | None = None) -> Flask:
         if not record:
             raise ApiError(f"Record '{record_id}' not found", 404)
         return jsonify({"record": record})
-
-    if app.config["ENABLE_ADMIN_ENDPOINTS"]:
-        @app.patch("/datasets/<dataset_id>/records/<record_id>")
-        def update_record(dataset_id: str, record_id: str) -> Any:
-            payload = request.get_json(silent=True) or {}
-            validate_record_payload(payload, partial=True)
-
-            state, records_map = get_dataset_or_404(dataset_id)
-            record = records_map.get(record_id)
-            if not record:
-                raise ApiError(f"Record '{record_id}' not found", 404)
-
-            protected = {"id", "dataset_id", "created_at"}
-            for key, value in payload.items():
-                if key in protected:
-                    continue
-                record[key] = value
-            record["updated_at"] = utc_now()
-            store.save(state)
-            return jsonify({"record": record})
-
-        @app.delete("/datasets/<dataset_id>/records/<record_id>")
-        def delete_record(dataset_id: str, record_id: str) -> Any:
-            state, records_map = get_dataset_or_404(dataset_id)
-            if record_id not in records_map:
-                raise ApiError(f"Record '{record_id}' not found", 404)
-            del records_map[record_id]
-            store.save(state)
-            return jsonify({"deleted": True, "record_id": record_id})
 
     @app.post("/datasets/<dataset_id>/splits/sample")
     def sample_splits(dataset_id: str) -> Any:
