@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Import bilingual.xlsx Maltese-English rows into the dataset API.
+"""Import bilingual.xlsx Maltese-English rows into the JSON data store.
 
-The script is intentionally idempotent: existing datasets and records are treated
-as already imported, and the final verification step confirms that every row in
-bilingual.xlsx is available through the API with the expected metadata.
+The script is intentionally idempotent: existing records are treated as already
+imported, and the final verification step confirms that every row in
+bilingual.xlsx is available in the generated data store with the expected
+metadata.
 """
 
 from __future__ import annotations
@@ -12,11 +13,9 @@ import argparse
 import json
 import sys
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from urllib.error import HTTPError, URLError
-from urllib.parse import quote, urlencode
-from urllib.request import Request, urlopen
 
 from openpyxl import load_workbook
 
@@ -26,7 +25,7 @@ TARGET_LANGUAGE = "mlt_Latn"
 LANGUAGE_PAIR = f"{SOURCE_LANGUAGE}-{TARGET_LANGUAGE}"
 WORKSHEET_NAME = "Bilingual"
 EXPECTED_HEADERS = ("English", "Maltese")
-DEFAULT_BASE_URL = "http://localhost:5000"
+DEFAULT_STORE_PATH = Path("data_store.json")
 
 DATASET_SUMMARY = (
     "A bilingual legal-text dataset derived from Court Notices published on the "
@@ -108,37 +107,24 @@ def load_rows(path: Path) -> list[BilingualRow]:
     return rows
 
 
-def request_json(
-    method: str,
-    base_url: str,
-    path: str,
-    *,
-    payload: dict[str, Any] | None = None,
-    query: dict[str, Any] | None = None,
-) -> tuple[int, dict[str, Any]]:
-    url = f"{base_url.rstrip('/')}{path}"
-    if query:
-        url = f"{url}?{urlencode(query)}"
+def utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
-    body = None if payload is None else json.dumps(payload).encode("utf-8")
-    request = Request(url, data=body, method=method)
-    request.add_header("Accept", "application/json")
-    if payload is not None:
-        request.add_header("Content-Type", "application/json")
 
-    try:
-        with urlopen(request, timeout=30) as response:
-            response_body = response.read().decode("utf-8")
-            return response.status, json.loads(response_body) if response_body else {}
-    except HTTPError as exc:
-        response_body = exc.read().decode("utf-8")
-        try:
-            parsed = json.loads(response_body) if response_body else {}
-        except json.JSONDecodeError:
-            parsed = {"error": response_body}
-        return exc.code, parsed
-    except URLError as exc:
-        raise ImportErrorWithDetails(f"Could not reach API at {base_url}: {exc.reason}") from exc
+def load_store(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {"datasets": {}, "records": {}}
+
+    with path.open("r", encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def save_store(path: Path, state: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = path.with_suffix(".tmp")
+    with temp_path.open("w", encoding="utf-8") as handle:
+        json.dump(state, handle, indent=2)
+    temp_path.replace(path)
 
 
 def dataset_payload() -> dict[str, Any]:
@@ -157,27 +143,22 @@ def dataset_payload() -> dict[str, Any]:
     }
 
 
-def ensure_dataset(base_url: str) -> None:
+def ensure_dataset(state: dict[str, Any]) -> str:
     payload = dataset_payload()
-    status, body = request_json("POST", base_url, "/datasets", payload=payload)
-    if status == 201:
-        print(f"Created dataset: {DATASET_ID}")
-        return
-    if status == 409:
-        patch_payload = {key: value for key, value in payload.items() if key != "id"}
-        patch_status, patch_body = request_json(
-            "PATCH",
-            base_url,
-            f"/datasets/{quote(DATASET_ID)}",
-            payload=patch_payload,
-        )
-        if patch_status == 200:
-            print(f"Updated existing dataset metadata: {DATASET_ID}")
-            return
-        raise ImportErrorWithDetails(
-            f"Dataset exists but metadata update failed with HTTP {patch_status}: {patch_body}"
-        )
-    raise ImportErrorWithDetails(f"Dataset creation failed with HTTP {status}: {body}")
+    now = utc_now()
+    datasets = state.setdefault("datasets", {})
+    state.setdefault("records", {}).setdefault(DATASET_ID, {})
+
+    existing = datasets.get(DATASET_ID)
+    if existing:
+        created_at = existing.get("created_at", now)
+        existing.update(payload)
+        existing["created_at"] = created_at
+        existing["updated_at"] = now
+        return "updated"
+
+    datasets[DATASET_ID] = {**payload, "created_at": now, "updated_at": now}
+    return "created"
 
 
 def build_record_payload(row: BilingualRow, xlsx_path: Path) -> dict[str, Any]:
@@ -211,45 +192,30 @@ def build_record_payload(row: BilingualRow, xlsx_path: Path) -> dict[str, Any]:
     }
 
 
-def insert_records(base_url: str, rows: list[BilingualRow], xlsx_path: Path) -> tuple[int, int]:
+def insert_records(state: dict[str, Any], rows: list[BilingualRow], xlsx_path: Path) -> tuple[int, int]:
+    now = utc_now()
+    records_map = state.setdefault("records", {}).setdefault(DATASET_ID, {})
     created = 0
     existing = 0
+
     for row in rows:
-        status, body = request_json(
-            "POST",
-            base_url,
-            f"/datasets/{quote(DATASET_ID)}/records",
-            payload=build_record_payload(row, xlsx_path),
-        )
-        if status == 201:
-            created += 1
-            continue
-        if status == 409:
+        if row.record_id in records_map:
             existing += 1
             continue
-        raise ImportErrorWithDetails(
-            f"Failed to insert row {row.row_number} as {row.record_id}; HTTP {status}: {body}"
-        )
+
+        records_map[row.record_id] = {
+            **build_record_payload(row, xlsx_path),
+            "dataset_id": DATASET_ID,
+            "created_at": now,
+            "updated_at": now,
+        }
+        created += 1
+
     return created, existing
 
 
-def fetch_all_records(base_url: str) -> list[dict[str, Any]]:
-    cursor = 0
-    records: list[dict[str, Any]] = []
-    while True:
-        status, body = request_json(
-            "GET",
-            base_url,
-            f"/datasets/{quote(DATASET_ID)}/records",
-            query={"batch_size": 10000, "cursor": cursor, "order": "natural"},
-        )
-        if status != 200:
-            raise ImportErrorWithDetails(f"Failed to fetch records; HTTP {status}: {body}")
-        records.extend(body.get("data", []))
-        next_cursor = body.get("next_cursor")
-        if next_cursor is None:
-            return records
-        cursor = int(next_cursor)
+def get_all_records(state: dict[str, Any]) -> list[dict[str, Any]]:
+    return list(state.setdefault("records", {}).setdefault(DATASET_ID, {}).values())
 
 
 def verify_inserted(expected_rows: list[BilingualRow], actual_records: list[dict[str, Any]]) -> None:
@@ -284,16 +250,21 @@ def verify_inserted(expected_rows: list[BilingualRow], actual_records: list[dict
 
     if len(actual_records) < len(expected_rows):
         raise ImportErrorWithDetails(
-            f"API returned {len(actual_records)} records but {len(expected_rows)} rows were expected"
+            f"Data store contains {len(actual_records)} records but {len(expected_rows)} rows were expected"
         )
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Import bilingual.xlsx Maltese-English court notice pairs into the dataset API."
+        description="Import bilingual.xlsx Maltese-English court notice pairs into the JSON data store."
     )
-    parser.add_argument("--base-url", default=DEFAULT_BASE_URL, help=f"API base URL (default: {DEFAULT_BASE_URL})")
     parser.add_argument("--xlsx", default="bilingual.xlsx", type=Path, help="Path to bilingual.xlsx")
+    parser.add_argument(
+        "--store-path",
+        default=DEFAULT_STORE_PATH,
+        type=Path,
+        help=f"Path to the JSON data store to write (default: {DEFAULT_STORE_PATH})",
+    )
     return parser.parse_args()
 
 
@@ -303,15 +274,19 @@ def main() -> int:
     if not rows:
         raise ImportErrorWithDetails(f"No importable bilingual rows found in {args.xlsx}")
 
-    ensure_dataset(args.base_url)
-    created, existing = insert_records(args.base_url, rows, args.xlsx)
-    records = fetch_all_records(args.base_url)
+    state = load_store(args.store_path)
+    dataset_status = ensure_dataset(state)
+    created, existing = insert_records(state, rows, args.xlsx)
+    save_store(args.store_path, state)
+
+    records = get_all_records(state)
     verify_inserted(rows, records)
 
     print(
         "Import verified successfully: "
-        f"{len(rows)} expected rows, {created} created, {existing} already existed, "
-        f"{len(records)} records available in dataset '{DATASET_ID}'."
+        f"dataset {dataset_status}, {len(rows)} expected rows, {created} created, "
+        f"{existing} already existed, {len(records)} records available in dataset "
+        f"'{DATASET_ID}' at {args.store_path}."
     )
     return 0
 
