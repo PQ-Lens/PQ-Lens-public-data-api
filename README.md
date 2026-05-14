@@ -1,14 +1,13 @@
 # PQ-Lens Court Order Sample Dataset API
 
-A lightweight Flask API for managing **dataset metadata** and **text records** for court-order related NLP workflows.
+A lightweight Flask API for read-only public access to **dataset metadata** and **text records** for court-order related NLP workflows.
 
 This project is designed as a small, local-first service that stores data in a JSON file and exposes endpoints for:
 
-- dataset CRUD
-- record CRUD
-- paginated record retrieval
+- read-only dataset metadata retrieval
+- read-only record retrieval with filtering and cursor pagination
 - deterministic shuffled sampling
-- split generation for evaluation/dev/test workflows
+- non-mutating split generation for evaluation/dev/test workflows
 
 ---
 
@@ -43,7 +42,7 @@ The application is implemented in `app.py` and built around:
 1. **Flask app factory (`create_app`)**
 2. **`DataStore` abstraction** for JSON-file persistence
 3. **Validation helpers** for datasets, records, and query/body parameters
-4. **REST endpoints** under `/datasets` and nested record routes
+4. **Public read-only REST endpoints** under `/datasets` and nested record routes
 
 Data is persisted to `data_store.json` by default (created automatically at runtime if absent).
 
@@ -236,47 +235,19 @@ Returns currently advertised language codes.
 
 ## Dataset endpoints
 
+The public API exposes dataset retrieval only. Dataset create, update, and delete routes are disabled by default so public users cannot alter the corpus.
+
 ### `GET /datasets`
 List all datasets.
 
-### `POST /datasets`
-Create a dataset.
-
-Required body fields:
-
-- `id`
-- `summary`
-- `language_mode`
-- `synthetic_status`
-- `provenance`
-
 ### `GET /datasets/<dataset_id>`
 Get one dataset.
-
-### `PATCH /datasets/<dataset_id>`
-Partially update dataset fields.
-
-Protected/immutable fields:
-
-- `id`
-- `created_at`
-
-### `DELETE /datasets/<dataset_id>`
-Delete dataset and all associated records.
 
 ---
 
 ## Record endpoints
 
-### `POST /datasets/<dataset_id>/records`
-Create a record inside a dataset.
-
-Required body fields:
-
-- `id`
-- `text`
-- `language`
-- `provenance`
+The public API exposes record retrieval only. Record create, update, and delete routes are disabled by default so public users cannot alter dataset contents.
 
 ### `GET /datasets/<dataset_id>/records`
 List records with optional filtering, ordering, and cursor pagination.
@@ -303,24 +274,12 @@ Response includes:
 ### `GET /datasets/<dataset_id>/records/<record_id>`
 Fetch one record.
 
-### `PATCH /datasets/<dataset_id>/records/<record_id>`
-Partially update one record.
-
-Protected/immutable fields:
-
-- `id`
-- `dataset_id`
-- `created_at`
-
-### `DELETE /datasets/<dataset_id>/records/<record_id>`
-Delete one record.
-
 ---
 
 ## Split sampling endpoint
 
 ### `POST /datasets/<dataset_id>/splits/sample`
-Build named split batches from dataset records.
+Build named split batches from dataset records without modifying stored data. This endpoint accepts `POST` because split definitions are supplied in the request body, but it is retrieval-only and does not create, update, or delete datasets or records.
 
 Request body:
 
@@ -340,17 +299,19 @@ Behavior:
 
 ---
 
-## Importing bilingual.xlsx through the API
+## Internal data import
 
-Use `scripts/import_bilingual_xlsx.py` to insert every Maltese-English pair from `bilingual.xlsx` into the API and then verify that all expected records are present. The API must be running before you execute the importer.
+The public API is read-only by default. Use `scripts/import_bilingual_xlsx.py` only against an internal/admin instance that has write endpoints explicitly enabled with `ENABLE_ADMIN_ENDPOINTS=true`. The API must be running before you execute the importer.
 
 ```bash
+ENABLE_ADMIN_ENDPOINTS=true python app.py
+
 python scripts/import_bilingual_xlsx.py \
   --base-url http://localhost:5000 \
   --xlsx bilingual.xlsx
 ```
 
-The importer creates or updates the `court_orders_bilingual` dataset using this metadata:
+Against an internal/admin instance, the importer creates or updates the `court_orders_bilingual` dataset using this metadata:
 
 - **Summary**: A bilingual legal-text dataset derived from Court Notices published on the Government of Malta website. It contains parallel Maltese–English text pairs extracted from court notice PDFs and converted into structured text format.
 - **Description**: This dataset contains Court Notices from the Government of Malta website (gov.mt). It contains Maltese–English pairs for each court notice. The original dataset format was PDF text; these extracts have been converted into structured text pairs in both Maltese and English. The dataset contains 2,310 rows of data. The latest record date is 7 May 2026, and the earliest record date is 22 November 2022. The dataset is suitable for Maltese–English and English–Maltese machine translation tasks, legal NLP research tasks, and bilingual legal language analysis.
@@ -366,38 +327,16 @@ For each worksheet row, the importer stores the English text in the record `text
 
 ## Examples
 
-### 1) Create dataset
+### 1) List datasets
 
 ```bash
-curl -X POST "http://localhost:5000/datasets" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "id": "court_orders",
-    "summary": "Court order metadata",
-    "description": "Bilingual corpus for extraction tasks",
-    "language_mode": "bilingual_aligned",
-    "synthetic_status": "non_synthetic",
-    "provenance": {
-      "source_url": "https://example.com/public-registry",
-      "source_type": "web"
-    }
-  }'
+curl "http://localhost:5000/datasets"
 ```
 
-### 2) Create record
+### 2) Fetch one dataset
 
 ```bash
-curl -X POST "http://localhost:5000/datasets/court_orders/records" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "id": "r1",
-    "text": "This is a sample court order record.",
-    "language": "eng_Latn",
-    "provenance": {
-      "source_text": "Manual extraction from registry",
-      "source_type": "manual_entry"
-    }
-  }'
+curl "http://localhost:5000/datasets/court_orders"
 ```
 
 ### 3) List records with deterministic shuffling
@@ -437,7 +376,7 @@ Common status codes:
 
 - `400` invalid input
 - `404` not found
-- `409` duplicate dataset/record IDs
+- `405` method not allowed for disabled public mutation routes
 - `500` unexpected server error
 
 ---
@@ -452,8 +391,7 @@ python -m unittest -v
 
 Current tests validate:
 
-- provenance requirements
-- NLLB language validation
+- public dataset and record mutation routes are disabled
 - natural ordering defaults
 - shuffle reproducibility with seed
 - disjoint split behavior

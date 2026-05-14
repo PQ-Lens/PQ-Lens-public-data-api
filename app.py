@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import random
 import re
 from datetime import datetime, timezone
@@ -8,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from flask import Flask, jsonify, request
+from werkzeug.exceptions import HTTPException
 
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_STORE_PATH = BASE_DIR / "data_store.json"
@@ -137,7 +139,8 @@ def validate_record_payload(payload: dict[str, Any], *, partial: bool = False) -
 
 def create_app(config: dict[str, Any] | None = None) -> Flask:
     app = Flask(__name__)
-    app.config.update({"DATA_STORE_PATH": DEFAULT_STORE_PATH})
+    admin_endpoints_enabled = os.environ.get("ENABLE_ADMIN_ENDPOINTS", "").lower() in {"1", "true", "yes"}
+    app.config.update({"DATA_STORE_PATH": DEFAULT_STORE_PATH, "ENABLE_ADMIN_ENDPOINTS": admin_endpoints_enabled})
     if config:
         app.config.update(config)
 
@@ -151,6 +154,11 @@ def create_app(config: dict[str, Any] | None = None) -> Flask:
     @app.errorhandler(404)
     def not_found(_: Any):
         return jsonify({"error": "Resource not found", "timestamp": utc_now()}), 404
+
+    @app.errorhandler(HTTPException)
+    def handle_http_exception(exc: HTTPException):
+        response = {"error": exc.name, "details": {"reason": exc.description}, "timestamp": utc_now()}
+        return jsonify(response), exc.code
 
     @app.errorhandler(Exception)
     def internal_error(exc: Exception):
@@ -180,32 +188,33 @@ def create_app(config: dict[str, Any] | None = None) -> Flask:
         datasets = list(state["datasets"].values())
         return jsonify({"datasets": datasets, "count": len(datasets)})
 
-    @app.post("/datasets")
-    def create_dataset() -> Any:
-        payload = request.get_json(silent=True) or {}
-        validate_dataset_payload(payload)
+    if app.config["ENABLE_ADMIN_ENDPOINTS"]:
+        @app.post("/datasets")
+        def create_dataset() -> Any:
+            payload = request.get_json(silent=True) or {}
+            validate_dataset_payload(payload)
 
-        state = store.load()
-        dataset_id = payload["id"]
-        if dataset_id in state["datasets"]:
-            raise ApiError(f"Dataset '{dataset_id}' already exists", 409)
+            state = store.load()
+            dataset_id = payload["id"]
+            if dataset_id in state["datasets"]:
+                raise ApiError(f"Dataset '{dataset_id}' already exists", 409)
 
-        dataset = {
-            "id": dataset_id,
-            "summary": payload["summary"],
-            "description": payload.get("description", ""),
-            "language_mode": payload["language_mode"],
-            "synthetic_status": payload["synthetic_status"],
-            "synthetic_details": payload.get("synthetic_details", {}),
-            "provenance": payload["provenance"],
-            "created_at": utc_now(),
-            "updated_at": utc_now(),
-        }
+            dataset = {
+                "id": dataset_id,
+                "summary": payload["summary"],
+                "description": payload.get("description", ""),
+                "language_mode": payload["language_mode"],
+                "synthetic_status": payload["synthetic_status"],
+                "synthetic_details": payload.get("synthetic_details", {}),
+                "provenance": payload["provenance"],
+                "created_at": utc_now(),
+                "updated_at": utc_now(),
+            }
 
-        state["datasets"][dataset_id] = dataset
-        state["records"].setdefault(dataset_id, {})
-        store.save(state)
-        return jsonify({"dataset": dataset}), 201
+            state["datasets"][dataset_id] = dataset
+            state["records"].setdefault(dataset_id, {})
+            store.save(state)
+            return jsonify({"dataset": dataset}), 201
 
     @app.get("/datasets/<dataset_id>")
     def get_dataset(dataset_id: str) -> Any:
@@ -215,34 +224,35 @@ def create_app(config: dict[str, Any] | None = None) -> Flask:
             raise ApiError(f"Dataset '{dataset_id}' not found", 404)
         return jsonify({"dataset": dataset})
 
-    @app.patch("/datasets/<dataset_id>")
-    def update_dataset(dataset_id: str) -> Any:
-        payload = request.get_json(silent=True) or {}
-        validate_dataset_payload(payload, partial=True)
+    if app.config["ENABLE_ADMIN_ENDPOINTS"]:
+        @app.patch("/datasets/<dataset_id>")
+        def update_dataset(dataset_id: str) -> Any:
+            payload = request.get_json(silent=True) or {}
+            validate_dataset_payload(payload, partial=True)
 
-        state = store.load()
-        dataset = state["datasets"].get(dataset_id)
-        if not dataset:
-            raise ApiError(f"Dataset '{dataset_id}' not found", 404)
+            state = store.load()
+            dataset = state["datasets"].get(dataset_id)
+            if not dataset:
+                raise ApiError(f"Dataset '{dataset_id}' not found", 404)
 
-        protected = {"id", "created_at"}
-        for key, value in payload.items():
-            if key in protected:
-                continue
-            dataset[key] = value
-        dataset["updated_at"] = utc_now()
-        store.save(state)
-        return jsonify({"dataset": dataset})
+            protected = {"id", "created_at"}
+            for key, value in payload.items():
+                if key in protected:
+                    continue
+                dataset[key] = value
+            dataset["updated_at"] = utc_now()
+            store.save(state)
+            return jsonify({"dataset": dataset})
 
-    @app.delete("/datasets/<dataset_id>")
-    def delete_dataset(dataset_id: str) -> Any:
-        state = store.load()
-        if dataset_id not in state["datasets"]:
-            raise ApiError(f"Dataset '{dataset_id}' not found", 404)
-        del state["datasets"][dataset_id]
-        state["records"].pop(dataset_id, None)
-        store.save(state)
-        return jsonify({"deleted": True, "dataset_id": dataset_id})
+        @app.delete("/datasets/<dataset_id>")
+        def delete_dataset(dataset_id: str) -> Any:
+            state = store.load()
+            if dataset_id not in state["datasets"]:
+                raise ApiError(f"Dataset '{dataset_id}' not found", 404)
+            del state["datasets"][dataset_id]
+            state["records"].pop(dataset_id, None)
+            store.save(state)
+            return jsonify({"deleted": True, "dataset_id": dataset_id})
 
     def get_dataset_or_404(dataset_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
         state = store.load()
@@ -252,32 +262,33 @@ def create_app(config: dict[str, Any] | None = None) -> Flask:
         records_map = state["records"].setdefault(dataset_id, {})
         return state, records_map
 
-    @app.post("/datasets/<dataset_id>/records")
-    def create_record(dataset_id: str) -> Any:
-        payload = request.get_json(silent=True) or {}
-        validate_record_payload(payload)
+    if app.config["ENABLE_ADMIN_ENDPOINTS"]:
+        @app.post("/datasets/<dataset_id>/records")
+        def create_record(dataset_id: str) -> Any:
+            payload = request.get_json(silent=True) or {}
+            validate_record_payload(payload)
 
-        state, records_map = get_dataset_or_404(dataset_id)
-        record_id = payload["id"]
-        if record_id in records_map:
-            raise ApiError(f"Record '{record_id}' already exists", 409)
+            state, records_map = get_dataset_or_404(dataset_id)
+            record_id = payload["id"]
+            if record_id in records_map:
+                raise ApiError(f"Record '{record_id}' already exists", 409)
 
-        record = {
-            "id": record_id,
-            "dataset_id": dataset_id,
-            "text": payload["text"],
-            "language": payload["language"],
-            "language_pair": payload.get("language_pair"),
-            "synthetic_status": payload.get("synthetic_status", "unknown"),
-            "translation_metadata": payload.get("translation_metadata", {}),
-            "provenance": payload["provenance"],
-            "attributes": payload.get("attributes", {}),
-            "created_at": utc_now(),
-            "updated_at": utc_now(),
-        }
-        records_map[record_id] = record
-        store.save(state)
-        return jsonify({"record": record}), 201
+            record = {
+                "id": record_id,
+                "dataset_id": dataset_id,
+                "text": payload["text"],
+                "language": payload["language"],
+                "language_pair": payload.get("language_pair"),
+                "synthetic_status": payload.get("synthetic_status", "unknown"),
+                "translation_metadata": payload.get("translation_metadata", {}),
+                "provenance": payload["provenance"],
+                "attributes": payload.get("attributes", {}),
+                "created_at": utc_now(),
+                "updated_at": utc_now(),
+            }
+            records_map[record_id] = record
+            store.save(state)
+            return jsonify({"record": record}), 201
 
     @app.get("/datasets/<dataset_id>/records")
     def list_records(dataset_id: str) -> Any:
@@ -333,33 +344,34 @@ def create_app(config: dict[str, Any] | None = None) -> Flask:
             raise ApiError(f"Record '{record_id}' not found", 404)
         return jsonify({"record": record})
 
-    @app.patch("/datasets/<dataset_id>/records/<record_id>")
-    def update_record(dataset_id: str, record_id: str) -> Any:
-        payload = request.get_json(silent=True) or {}
-        validate_record_payload(payload, partial=True)
+    if app.config["ENABLE_ADMIN_ENDPOINTS"]:
+        @app.patch("/datasets/<dataset_id>/records/<record_id>")
+        def update_record(dataset_id: str, record_id: str) -> Any:
+            payload = request.get_json(silent=True) or {}
+            validate_record_payload(payload, partial=True)
 
-        state, records_map = get_dataset_or_404(dataset_id)
-        record = records_map.get(record_id)
-        if not record:
-            raise ApiError(f"Record '{record_id}' not found", 404)
+            state, records_map = get_dataset_or_404(dataset_id)
+            record = records_map.get(record_id)
+            if not record:
+                raise ApiError(f"Record '{record_id}' not found", 404)
 
-        protected = {"id", "dataset_id", "created_at"}
-        for key, value in payload.items():
-            if key in protected:
-                continue
-            record[key] = value
-        record["updated_at"] = utc_now()
-        store.save(state)
-        return jsonify({"record": record})
+            protected = {"id", "dataset_id", "created_at"}
+            for key, value in payload.items():
+                if key in protected:
+                    continue
+                record[key] = value
+            record["updated_at"] = utc_now()
+            store.save(state)
+            return jsonify({"record": record})
 
-    @app.delete("/datasets/<dataset_id>/records/<record_id>")
-    def delete_record(dataset_id: str, record_id: str) -> Any:
-        state, records_map = get_dataset_or_404(dataset_id)
-        if record_id not in records_map:
-            raise ApiError(f"Record '{record_id}' not found", 404)
-        del records_map[record_id]
-        store.save(state)
-        return jsonify({"deleted": True, "record_id": record_id})
+        @app.delete("/datasets/<dataset_id>/records/<record_id>")
+        def delete_record(dataset_id: str, record_id: str) -> Any:
+            state, records_map = get_dataset_or_404(dataset_id)
+            if record_id not in records_map:
+                raise ApiError(f"Record '{record_id}' not found", 404)
+            del records_map[record_id]
+            store.save(state)
+            return jsonify({"deleted": True, "record_id": record_id})
 
     @app.post("/datasets/<dataset_id>/splits/sample")
     def sample_splits(dataset_id: str) -> Any:
