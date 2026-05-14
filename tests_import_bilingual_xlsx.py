@@ -14,6 +14,9 @@ from scripts.import_bilingual_xlsx import (
     WORKSHEET_NAME,
     build_record_payload,
     dataset_payload,
+    ensure_dataset,
+    get_all_records,
+    insert_records,
     load_rows,
     verify_inserted,
 )
@@ -63,11 +66,26 @@ class BilingualImporterTestCase(unittest.TestCase):
         self.assertEqual(payload["translation_metadata"]["target_text"], "Avviż bil-Malti")
         self.assertEqual(payload["attributes"]["row_number"], 2)
 
-    def test_verify_inserted_accepts_matching_api_records(self) -> None:
+    def test_verify_inserted_accepts_matching_data_store_records(self) -> None:
         rows = load_rows(self._write_workbook())
         actual_records = [build_record_payload(row, Path("bilingual.xlsx")) for row in rows]
 
         verify_inserted(rows, actual_records)
+
+    def test_insert_records_writes_data_store_shape(self) -> None:
+        rows = load_rows(self._write_workbook())
+        state = {"datasets": {}, "records": {}}
+
+        dataset_status = ensure_dataset(state)
+        created, existing = insert_records(state, rows, Path("bilingual.xlsx"))
+        records = get_all_records(state)
+
+        self.assertEqual(dataset_status, "created")
+        self.assertEqual(created, 2)
+        self.assertEqual(existing, 0)
+        self.assertIn(DATASET_ID, state["datasets"])
+        self.assertEqual({record["dataset_id"] for record in records}, {DATASET_ID})
+        verify_inserted(rows, records)
 
 
 if __name__ == "__main__":

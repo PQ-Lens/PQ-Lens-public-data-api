@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -15,71 +16,100 @@ class ApiTestCase(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
 
-    def _create_dataset(self) -> dict:
-        response = self.client.post(
-            "/datasets",
-            json={
-                "id": "court_orders",
-                "summary": "Court order metadata.",
-                "description": "A few sentences describing the dataset.",
-                "language_mode": "bilingual_aligned",
-                "synthetic_status": "non_synthetic",
-                "provenance": {
-                    "source_url": "https://example.com/public-registry",
-                    "source_type": "web",
-                },
-            },
-        )
-        self.assertEqual(response.status_code, 201)
-        return response.get_json()["dataset"]
-
-    def test_create_dataset_requires_source_url_or_text(self) -> None:
-        response = self.client.post(
-            "/datasets",
-            json={
-                "id": "bad_dataset",
-                "summary": "Missing provenance source details.",
-                "language_mode": "monolingual",
-                "synthetic_status": "unknown",
-                "provenance": {"source_type": "other"},
-            },
-        )
-
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("source_url", response.get_json()["error"])
-
-    def test_create_record_validates_nllb_language_tag(self) -> None:
-        self._create_dataset()
-        response = self.client.post(
-            "/datasets/court_orders/records",
-            json={
-                "id": "r1",
-                "text": "hello",
-                "language": "en",
-                "provenance": {
-                    "source_text": "OCR process from public archive",
-                    "source_type": "ocr_archive",
-                },
-            },
-        )
-
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("NLLB", response.get_json()["error"])
-
-    def test_batch_defaults_to_natural_order(self) -> None:
-        self._create_dataset()
-        for idx in range(1, 4):
-            payload = {
+    def _seed_store(self, record_count: int = 0) -> None:
+        dataset_id = "court_orders"
+        records = {}
+        for idx in range(1, record_count + 1):
+            records[f"r{idx}"] = {
                 "id": f"r{idx}",
+                "dataset_id": dataset_id,
                 "text": f"text-{idx}",
                 "language": "eng_Latn",
+                "language_pair": None,
+                "synthetic_status": "unknown",
+                "translation_metadata": {},
                 "provenance": {
                     "source_text": "Manual registry export",
                     "source_type": "manual_entry",
                 },
+                "attributes": {},
+                "created_at": "2026-01-01T10:00:00+00:00",
+                "updated_at": "2026-01-01T10:00:00+00:00",
             }
-            response = self.client.post("/datasets/court_orders/records", json=payload)
-            self.assertEqual(response.status_code, 201)
+
+        state = {
+            "datasets": {
+                dataset_id: {
+                    "id": dataset_id,
+                    "summary": "Court order metadata.",
+                    "description": "A few sentences describing the dataset.",
+                    "language_mode": "bilingual_aligned",
+                    "synthetic_status": "non_synthetic",
+                    "synthetic_details": {},
+                    "provenance": {
+                        "source_url": "https://example.com/public-registry",
+                        "source_type": "web",
+                    },
+                    "created_at": "2026-01-01T10:00:00+00:00",
+                    "updated_at": "2026-01-01T10:00:00+00:00",
+                }
+            },
+            "records": {dataset_id: records},
+        }
+        self.store_path.write_text(json.dumps(state), encoding="utf-8")
+
+    def _load_store(self) -> dict:
+        return json.loads(self.store_path.read_text(encoding="utf-8"))
+
+    def test_public_dataset_mutation_endpoints_are_not_implemented(self) -> None:
+        self._seed_store()
+
+        create_response = self.client.post(
+            "/datasets",
+            json={
+                "id": "bad_dataset",
+                "summary": "Should not be created publicly.",
+                "language_mode": "monolingual",
+                "synthetic_status": "unknown",
+                "provenance": {"source_url": "https://example.com"},
+            },
+        )
+        update_response = self.client.patch("/datasets/court_orders", json={"summary": "changed"})
+        delete_response = self.client.delete("/datasets/court_orders")
+
+        self.assertEqual(create_response.status_code, 405)
+        self.assertEqual(update_response.status_code, 405)
+        self.assertEqual(delete_response.status_code, 405)
+        self.assertEqual(
+            self._load_store()["datasets"]["court_orders"]["summary"],
+            "Court order metadata.",
+        )
+
+    def test_public_record_mutation_endpoints_are_not_implemented(self) -> None:
+        self._seed_store(record_count=1)
+
+        create_response = self.client.post(
+            "/datasets/court_orders/records",
+            json={
+                "id": "r2",
+                "text": "hello",
+                "language": "eng_Latn",
+                "provenance": {"source_text": "manual"},
+            },
+        )
+        update_response = self.client.patch(
+            "/datasets/court_orders/records/r1",
+            json={"text": "changed"},
+        )
+        delete_response = self.client.delete("/datasets/court_orders/records/r1")
+
+        self.assertEqual(create_response.status_code, 405)
+        self.assertEqual(update_response.status_code, 405)
+        self.assertEqual(delete_response.status_code, 405)
+        self.assertEqual(self._load_store()["records"]["court_orders"]["r1"]["text"], "text-1")
+
+    def test_batch_defaults_to_natural_order(self) -> None:
+        self._seed_store(record_count=3)
 
         response = self.client.get("/datasets/court_orders/records")
         body = response.get_json()
@@ -90,20 +120,7 @@ class ApiTestCase(unittest.TestCase):
         self.assertEqual([item["id"] for item in body["data"]], ["r1", "r2", "r3"])
 
     def test_batch_shuffle_is_reproducible_with_seed(self) -> None:
-        self._create_dataset()
-        for idx in range(1, 6):
-            self.client.post(
-                "/datasets/court_orders/records",
-                json={
-                    "id": f"r{idx}",
-                    "text": f"text-{idx}",
-                    "language": "eng_Latn",
-                    "provenance": {
-                        "source_text": "Manual registry export",
-                        "source_type": "manual_entry",
-                    },
-                },
-            )
+        self._seed_store(record_count=5)
 
         first = self.client.get(
             "/datasets/court_orders/records?order=shuffle&seed=42&batch_size=5"
@@ -117,21 +134,9 @@ class ApiTestCase(unittest.TestCase):
             [item["id"] for item in second["data"]],
         )
 
-    def test_split_sampling_returns_disjoint_sets(self) -> None:
-        self._create_dataset()
-        for idx in range(1, 11):
-            self.client.post(
-                "/datasets/court_orders/records",
-                json={
-                    "id": f"r{idx}",
-                    "text": f"text-{idx}",
-                    "language": "eng_Latn",
-                    "provenance": {
-                        "source_text": "Manual registry export",
-                        "source_type": "manual_entry",
-                    },
-                },
-            )
+    def test_split_sampling_returns_disjoint_sets_without_mutating_data(self) -> None:
+        self._seed_store(record_count=10)
+        before = self._load_store()
 
         response = self.client.post(
             "/datasets/court_orders/splits/sample",
@@ -150,6 +155,7 @@ class ApiTestCase(unittest.TestCase):
             ids = [item["id"] for item in body["splits"][split_name]]
             all_ids.extend(ids)
         self.assertEqual(len(all_ids), len(set(all_ids)))
+        self.assertEqual(self._load_store(), before)
 
 
 if __name__ == "__main__":
