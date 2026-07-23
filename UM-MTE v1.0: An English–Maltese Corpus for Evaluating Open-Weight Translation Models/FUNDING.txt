@@ -1,0 +1,14 @@
+UM-MTE v1.0 was created as one research output of:
+
+PQ-LENS - PQ Dashboard: Large Language Models for Enhanced Navigation,
+Analysis and Synthesis of Maltese Parliamentary Questions
+
+PQ-LENS is funded by XJENZA MALTA under the Digital Technologies Programme.
+The University of Malta Principal Investigator is Prof. Joel Azzopardi.
+
+UM-MTE is one dataset output of the wider PQ-LENS project. This release is not
+the complete PQ-LENS project dataset and contains no Parliamentary Question
+records.
+
+Before publication, insert the exact XJENZA MALTA grant or award number from
+the grant agreement if the drUM form or funder acknowledgement requires it.
