@@ -1,0 +1,18 @@
+UM-MTE v1.0 metadata-only release
+
+Copyright (c) 2026 Davis Poku Amankwa, Joel Azzopardi,
+Chukwuebuka Sylvanus Ngwu, and David Ohiole Imolore.
+
+Except where otherwise indicated, the original UM-MTE metadata layer,
+manifest, schema and documentation in this package are licensed under the
+Creative Commons Attribution 4.0 International licence (CC BY 4.0):
+
+https://creativecommons.org/licenses/by/4.0/
+
+You may share and adapt the licensed material for any purpose, including
+commercial use, provided that appropriate credit is given, a link to the
+licence is supplied, and changes are indicated.
+
+This licence does not apply to the underlying publications linked from the
+metadata. Copyright and other rights in source publications remain with their
+respective publishers or public bodies.

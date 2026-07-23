@@ -1,0 +1,58 @@
+{
+  "dataset": "UM-MTE",
+  "version": "1.0",
+  "release_type": "metadata_only",
+  "text_included": false,
+  "pq_data_included": false,
+  "description": "Text-free metadata release retaining identifiers, provenance URLs, dates, alignment metadata, text lengths and SHA-256 fingerprints.",
+  "records": 13535,
+  "english_whitespace_tokens": 18275509,
+  "maltese_whitespace_tokens": 15564612,
+  "components": [
+    {
+      "collection": "Malta Government Gazette and legislation",
+      "file": "um_mte_v1_metadata_gazette_legislation.jsonl.gz",
+      "records": 8540,
+      "english_whitespace_tokens": 16201241,
+      "maltese_whitespace_tokens": 13825732,
+      "content_categories": {
+        "government_gazette_notices": 3,
+        "legal_notices": 7067,
+        "acts": 1374,
+        "local_council_bye_laws": 96
+      },
+      "source_export_file": "um_mte_v1_gazette_legislation.jsonl.gz",
+      "source_export_sha256": "513d3053acbf66d3038df91137ab909af0728279df895c53015a8f269cf3e74c",
+      "metadata_file_sha256": "914d3fad5f724437c1d125dcb25c376c9f7594e59be8e75747c4cf4688754ce0",
+      "metadata_file_bytes": 1235663
+    },
+    {
+      "collection": "Newsbook local news",
+      "file": "um_mte_v1_metadata_newsbook.jsonl.gz",
+      "records": 4863,
+      "english_whitespace_tokens": 2033141,
+      "maltese_whitespace_tokens": 1705243,
+      "content_categories": {
+        "newsbook_local_news": 4863
+      },
+      "source_export_file": "um_mte_v1_newsbook.jsonl.gz",
+      "source_export_sha256": "937a07b87f238e5bb31495d4bccd4d9d0b243b6219b32f4bc615b4b6ace733a3",
+      "metadata_file_sha256": "2e20438f0072e10be4bc20cc56294b212032e774c3f75aa902e82cee15023fa7",
+      "metadata_file_bytes": 1145821
+    },
+    {
+      "collection": "Constitution of Malta",
+      "file": "um_mte_v1_metadata_constitution.jsonl.gz",
+      "records": 132,
+      "english_whitespace_tokens": 41127,
+      "maltese_whitespace_tokens": 33637,
+      "content_categories": {
+        "constitution_articles": 132
+      },
+      "source_export_file": "um_mte_v1_constitution.jsonl.gz",
+      "source_export_sha256": "3712e76b3510bf7c7083a85b365196cf08ca7505a741316a50a11f8aad157d8f",
+      "metadata_file_sha256": "ba4b9088ba033caecb8f1909b20214a17d15b9e763dd5f150af891b34157b798",
+      "metadata_file_bytes": 14912
+    }
+  ]
+}
