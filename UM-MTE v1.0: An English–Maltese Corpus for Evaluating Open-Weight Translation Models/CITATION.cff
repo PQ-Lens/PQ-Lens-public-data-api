@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use this release, please cite it using the drUM DOI."
+title: "UM-MTE v1.0: An English-Maltese Corpus for Evaluating Open-Weight Translation Models"
+type: dataset
+version: "1.0"
+authors:
+  - family-names: "Amankwa"
+    given-names: "Davis Poku"
+  - family-names: "Azzopardi"
+    given-names: "Joel"
+  - family-names: "Ngwu"
+    given-names: "Chukwuebuka Sylvanus"
+  - family-names: "Imolore"
+    given-names: "David Ohiole"
+license: "CC-BY-4.0"
+abstract: >-
+  Full-text and metadata release for 13,535 English-Maltese parallel documents
+  and articles from Malta Government Gazette and legislation material,
+  Newsbook local news, and the Constitution of Malta.
+institution: "University of Malta"
