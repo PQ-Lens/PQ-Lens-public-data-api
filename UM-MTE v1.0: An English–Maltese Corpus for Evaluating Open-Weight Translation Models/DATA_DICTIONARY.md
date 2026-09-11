@@ -11,11 +11,11 @@ principal fields are:
 |---|---|
 | `id` | Stable record identifier. |
 | `dataset_id` | Internal source-collection identifier. |
-| `text` | English document or article text. |
+| `text` | English document text, except that Newsbook records contain the fixed English copyright notice instead of article text. |
 | `language` | Source-language tag, normally `eng_Latn`. |
 | `language_pair` | Pair tag, normally `eng_Latn-mlt_Latn`. |
 | `synthetic_status` | All included records are `non_synthetic`. |
-| `translation_metadata.target_text` | Maltese document or article text. |
+| `translation_metadata.target_text` | Maltese document text, except that Newsbook records contain the fixed Maltese copyright notice instead of article text. |
 | `translation_metadata` | Pairing, language and alignment metadata. |
 | `provenance` | Source type, source URL and related provenance fields. |
 | `attributes` | Source-specific dates, identifiers, URLs and processing metadata. |
@@ -52,13 +52,22 @@ principal fields are:
 | `provenance.publication_date_maltese` | Maltese publication date where recorded. |
 | `provenance.version_date` | Point-in-time version date where applicable. |
 | `provenance.identifiers` | Source-specific ELI, Gazette, notice, article, WordPress or pair identifiers. |
-| `text_statistics.english_characters` | JavaScript Unicode-string length of the omitted English field. |
-| `text_statistics.maltese_characters` | JavaScript Unicode-string length of the omitted Maltese field. |
+| `text_statistics.english_characters` | JavaScript Unicode-string length of the corresponding stored English field. |
+| `text_statistics.maltese_characters` | JavaScript Unicode-string length of the corresponding stored Maltese field. |
 | `text_statistics.english_whitespace_tokens` | Unicode-aware whitespace-token count used by the paper audit. |
 | `text_statistics.maltese_whitespace_tokens` | Unicode-aware whitespace-token count used by the paper audit. |
-| `text_statistics.english_sha256` | SHA-256 fingerprint of the exact omitted English UTF-8 text. |
-| `text_statistics.maltese_sha256` | SHA-256 fingerprint of the exact omitted Maltese UTF-8 text. |
+| `text_statistics.english_sha256` | SHA-256 fingerprint of the corresponding stored English UTF-8 field. |
+| `text_statistics.maltese_sha256` | SHA-256 fingerprint of the corresponding stored Maltese UTF-8 field. |
 | `created_at` | Original record-creation timestamp. |
 | `updated_at` | Original record-update timestamp. |
 
 Fields without an available value are omitted rather than stored as null.
+
+## Newsbook copyright notices
+
+For every record whose `dataset_id` is `newsbook_local_bilingual`, the English
+`text` field is `Please refer to URL due to copyright.` and the Maltese
+`translation_metadata.target_text` field is `Jekk jogħġbok irreferi għall-URL
+minħabba d-drittijiet tal-awtur.` Titles, URLs, identifiers, dates and alignment
+metadata are retained. The Newsbook metadata statistics describe these fixed
+notices and do not fingerprint the omitted article bodies.

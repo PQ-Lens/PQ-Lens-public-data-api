@@ -29,6 +29,11 @@ Publisher: Beacon Media Group
 - English edition: https://newsbook.com.mt/en/
 - Maltese edition: https://newsbook.com.mt/
 
+The release retains the English and Maltese publisher headlines, source URLs,
+WordPress identifiers, publication dates and pairing metadata. Newsbook article
+bodies are not redistributed. The corresponding English and Maltese text
+fields contain copyright notices directing users to the retained source URLs.
+
 ## Access date
 
 Collection-level access points were verified on 22 July 2026.
@@ -38,7 +43,12 @@ not by itself relicense the underlying source publications.
 
 ## Redistribution status
 
-The project has confirmed the applicable permissions and reuse basis for
-including the source-derived full text in this release. Underlying source
+Newsbook article bodies are excluded from redistribution. The release retains
+only the Newsbook metadata and headlines described above, with copyright
+notices in the body fields. The CC BY 4.0 licence applies only to the original
+UM-MTE metadata and documentation and does not relicense Newsbook material.
+
+The Gazette/legislation and Constitution components continue to include source
+text under their applicable permissions and reuse basis. Underlying source
 copyright and attribution remain with the publishers and public bodies listed
 above.

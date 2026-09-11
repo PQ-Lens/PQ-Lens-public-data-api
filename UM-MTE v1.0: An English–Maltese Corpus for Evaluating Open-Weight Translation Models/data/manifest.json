@@ -1,13 +1,13 @@
 {
   "dataset": "UM-MTE",
   "version": "1.0",
-  "release_type": "full_text_and_metadata",
+  "release_type": "full_text_with_newsbook_rights_placeholders_and_metadata",
   "text_included": true,
   "pq_data_included": false,
-  "description": "Full-text and metadata release retaining English and Maltese document/article text, identifiers, provenance URLs, dates, alignment metadata, text lengths and SHA-256 fingerprints.",
+  "description": "Full English and Maltese text for the Gazette/legislation and Constitution components, plus titles, source URLs, identifiers, metadata and copyright notices in place of Newsbook article text.",
   "records": 13535,
-  "english_whitespace_tokens": 18275509,
-  "maltese_whitespace_tokens": 15564612,
+  "english_whitespace_tokens": 16276409,
+  "maltese_whitespace_tokens": 13893410,
   "components": [
     {
       "collection": "Malta Government Gazette and legislation",
@@ -31,16 +31,17 @@
       "collection": "Newsbook local news",
       "metadata_file": "data/um_mte_v1_metadata_newsbook.jsonl.gz",
       "records": 4863,
-      "english_whitespace_tokens": 2033141,
-      "maltese_whitespace_tokens": 1705243,
+      "english_whitespace_tokens": 34041,
+      "maltese_whitespace_tokens": 34041,
       "content_categories": {
         "newsbook_local_news": 4863
       },
       "full_text_file": "data/full_text/um_mte_v1_newsbook.jsonl.gz",
-      "full_text_file_sha256": "937a07b87f238e5bb31495d4bccd4d9d0b243b6219b32f4bc615b4b6ace733a3",
-      "full_text_file_bytes": 11259135,
-      "metadata_file_sha256": "2e20438f0072e10be4bc20cc56294b212032e774c3f75aa902e82cee15023fa7",
-      "metadata_file_bytes": 1145821
+      "full_text_file_sha256": "77024416338e3ab29d9c16305d7a7b538eb2831d91f2d6ff3cb1b8cc0c07321c",
+      "full_text_file_bytes": 1094519,
+      "metadata_file_sha256": "4e7ee84926fe9d038b94f5748bc829f4c60e45bfa63ca425caffb2fc1330f28d",
+      "metadata_file_bytes": 641650,
+      "content_status": "titles_urls_and_copyright_placeholders"
     },
     {
       "collection": "Constitution of Malta",
@@ -57,5 +58,6 @@
       "metadata_file_sha256": "ba4b9088ba033caecb8f1909b20214a17d15b9e763dd5f150af891b34157b798",
       "metadata_file_bytes": 14912
     }
-  ]
+  ],
+  "newsbook_article_text_included": false
 }

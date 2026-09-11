@@ -2,18 +2,19 @@
 
 ## Dataset summary
 
-UM-MTE v1.0 is a non-synthetic English-Maltese parallel-corpus project
-developed at the University of Malta for research on machine translation,
-computational linguistics and low-resource language technology. The corpus
-contains 13,535 bilingual document- and article-level units drawn from three
-publicly accessible source collections: Malta Government Gazette and
-legislation material, Newsbook local-news articles, and the Constitution of
-Malta.
+UM-MTE v1.0 is a non-synthetic English-Maltese corpus project developed at the
+University of Malta for research on machine translation, computational
+linguistics and low-resource language technology. The release contains 13,535
+bilingual records drawn from three publicly accessible source collections:
+Malta Government Gazette and legislation material, Newsbook local-news
+articles, and the Constitution of Malta.
 
-This release includes both the complete English and Maltese source-text export
-and a text-free metadata view of the same records. The project has confirmed
-that there are no unresolved redistribution issues for the included release
-materials.
+Complete English and Maltese source text is included for 8,672 records from
+the Gazette/legislation and Constitution components. The 4,863 Newsbook
+records retain publisher headlines, source URLs, identifiers, dates and
+article-level pairing metadata, but their article bodies are replaced by fixed
+English and Maltese copyright notices directing users to the source URLs. A
+text-free metadata view accompanies each component.
 
 UM-MTE v1.0 is one research output of PQ-LENS - PQ Dashboard: Large Language
 Models for Enhanced Navigation, Analysis and Synthesis of Maltese Parliamentary
@@ -29,7 +30,7 @@ The paired corpus comprises:
 | Source collection | Bilingual records | Alignment unit |
 |---|---:|---|
 | Malta Government Gazette and legislation | 8,540 | Legislative document or Gazette notice |
-| Newsbook local news | 4,863 | News article |
+| Newsbook local news | 4,863 | Headline and article-link pair; bodies omitted |
 | Constitution of Malta | 132 | Constitution article |
 | **Total** | **13,535** | Mixed document/article units |
 
@@ -38,7 +39,7 @@ The three source collections contain six observed content categories:
 | Content category | Bilingual records | Share |
 |---|---:|---:|
 | Legal notices | 7,067 | 52.213% |
-| Newsbook local-news articles | 4,863 | 35.929% |
+| Newsbook local-news title/link records | 4,863 | 35.929% |
 | Acts | 1,374 | 10.151% |
 | Constitution articles | 132 | 0.975% |
 | Local-council bye-laws | 96 | 0.709% |
@@ -62,9 +63,10 @@ Government Gazette repository. Their source-date metadata span:
 - local-council bye-laws: 2009-2023; and
 - the three paired Government Gazette notices: 2026.
 
-Newsbook pairs come from Beacon Media Group's English and Maltese editions.
-The English publication dates represented in the corpus run from 15 June 2024
-to 28 May 2026, and the Maltese dates run from 16 June 2024 to 28 May 2026.
+Newsbook title/link pairs come from Beacon Media Group's English and Maltese
+editions. The English publication dates represented in the metadata run from
+15 June 2024 to 28 May 2026, and the Maltese dates run from 16 June 2024 to 28
+May 2026. Article bodies are not included in the release.
 
 The Constitution component uses the official English and Maltese point-in-time
 versions dated 27 March 2026. Across the dated collections, the source metadata
@@ -82,8 +84,9 @@ claim sentence-level or paragraph-level alignment.
 - Acts, legal notices and local-council bye-laws were paired through the same
   European Legislation Identifier in the English and Maltese Legislation Malta
   views.
-- Newsbook articles were paired through the publisher site's WPML `hreflang`
-  alternate links.
+- Newsbook records were paired through the publisher site's WPML `hreflang`
+  alternate links. Both publisher headlines and URLs remain, but the article
+  bodies are omitted.
 - Government Gazette notices were paired by notice number.
 - Constitution text was paired by numbered article.
 
@@ -96,40 +99,43 @@ records remain candidates for bilingual spot-checking.
 ## Text volume
 
 Using a reproducible definition in which each contiguous sequence of
-non-whitespace characters is one descriptive token, the full-text corpus
-contains:
+non-whitespace characters is one descriptive token, the 8,672 records that
+retain source text contain:
 
 | Measure | English | Maltese |
 |---|---:|---:|
-| Whitespace tokens | 18,275,509 | 15,564,612 |
-| Mean tokens per unit | 1,350.24 | 1,149.95 |
-| Median tokens per unit | 426 | 350 |
-| 95th percentile | 5,781.1 | 4,959.3 |
+| Whitespace tokens | 16,242,368 | 13,859,369 |
+| Mean tokens per unit | 1,872.97 | 1,598.17 |
+| Median tokens per unit | 516 | 418 |
+| 95th percentile | 8,207.4 | 7,131.3 |
 
-The combined total is 33,840,121 whitespace tokens. These are not
-model-tokenizer counts or linguistically segmented word counts. The long
-units reflect the document/article-level design; users of limited-context
-models must document any chunking, truncation or exclusion.
+The combined retained source-text total is 30,101,737 whitespace tokens. Each
+Newsbook copyright notice contains seven whitespace-delimited tokens, so the
+stored release totals reported in `data/manifest.json` are 16,276,409 English
+and 13,893,410 Maltese tokens. The notices are not corpus text and should not
+be treated as translation-training material. These counts are not
+model-tokenizer counts or linguistically segmented word counts.
 
 ## Record content
 
-The text-free metadata files retain stable record and collection
-identifiers, language tags, content category, alignment metadata, source URLs,
-dates, source-specific identifiers, text lengths, whitespace-token counts and
-SHA-256 fingerprints of the omitted English and Maltese text.
+The text-free metadata files retain stable record and collection identifiers,
+language tags, content category, alignment metadata, source URLs, dates,
+source-specific identifiers and statistics for the corresponding stored text
+fields. For Newsbook records, those statistics and fingerprints describe only
+the fixed copyright notices; they do not describe or fingerprint the omitted
+article bodies.
 
-The metadata view deliberately removes the English text, Maltese text,
-publisher headlines and source-text descriptions. The fingerprints allow an
-exact local copy of a source text to be checked for correspondence.
-
-The complete files are under `data/full_text/` and retain the original exported
-records, including English in the `text` field and Maltese in
-`translation_metadata.target_text`. They are gzip-compressed JSON Lines, with
-one bilingual document or article per line.
+The files under `data/full_text/` are gzip-compressed JSON Lines, with one
+bilingual record per line. The Gazette/legislation and Constitution files
+retain English in `text` and Maltese in `translation_metadata.target_text`.
+In the Newsbook file, these fields contain copyright notices. The English and
+Maltese publisher headlines remain in `translation_metadata.source_title` and
+`translation_metadata.target_title`, and the corresponding URLs remain in the
+record provenance and attributes.
 
 ## Quality and limitations
 
-The audit of the 13,535 bilingual records found:
+The audit of the 8,672 records that retain source text found:
 
 | Check | Result |
 |---|---:|
@@ -138,8 +144,8 @@ The audit of the 13,535 bilingual records found:
 | English texts containing U+FFFD | 246 |
 | Maltese texts containing U+FFFD | 251 |
 | English texts not normalized to NFC | 7 |
-| Maltese texts not normalized to NFC | 16 |
-| Pairs outside a 1:3-3:1 whitespace-token ratio | 110 |
+| Maltese texts not normalized to NFC | 15 |
+| Pairs outside a 1:3-3:1 whitespace-token ratio | 16 |
 | Exact duplicate bilingual pair groups | 1 |
 | Excess records caused by exact duplication | 1 |
 | Completed bilingual manual-QA labels | 0 |
@@ -150,22 +156,28 @@ ordinary-character OCR substitutions. A publisher-provided link or a shared
 legal identifier is strong pairing evidence but is not a completed human
 adequacy assessment.
 
+All 4,863 Newsbook records were separately verified after sanitization: both
+publisher headlines and both URLs remain present, and the English and Maltese
+body fields contain only the documented copyright notices.
+
 Version 1.0 has no fixed corpus-wide train, development or test split. It also
 does not include a corpus-wide external-contamination analysis. A separate
 100-document model-evaluation artifact is not part of this deposit.
 
-The corpus over-represents formal legal, administrative and edited news text.
-It is not a balanced sample of general Maltese or English, and it should not be
-presented as representative of informal conversation, dialectal variation,
-social media or natural code-switching.
+The retained source-text corpus over-represents formal legal and administrative
+text. Newsbook contributes paired headlines and provenance, not article text.
+The release is not a balanced sample of general Maltese or English, and it
+should not be presented as representative of informal conversation, dialectal
+variation, social media or natural code-switching.
 
 ## Intended and out-of-scope uses
 
-Intended uses include English-Maltese and Maltese-English translation
-research, legal and administrative translation research, local-news
-translation, long-document translation, terminology studies, quality
-estimation, provenance analysis and supervised or parameter-efficient model
-adaptation.
+The Gazette/legislation and Constitution components support English-Maltese
+and Maltese-English translation research, legal and administrative translation
+research, long-document translation, terminology studies, quality estimation
+and model adaptation. The Newsbook component supports headline-pairing and
+provenance research. It does not provide article text for local-news
+translation or model training; users must follow the retained source URLs.
 
 UM-MTE is not a certification of translation safety. Legal, medical,
 immigration, emergency and other high-stakes uses require qualified human
@@ -174,19 +186,20 @@ inference, surveillance or deceptive localized content.
 
 ## Rights and licensing
 
-The project has confirmed the redistribution basis for the full-text release.
 The CC BY 4.0 notice applies to the original UM-MTE selection, metadata layer,
-manifest, schema and documentation. Source-derived full text is redistributed
-under the applicable permissions and reuse basis confirmed by the project.
-Copyright and attribution in the underlying publications remain with the
-Office of the State Advocate, Department of Information, Beacon Media Group
-and any other identified source rights holders. Source access points and
-attribution are listed in `SOURCE_ATTRIBUTION.md`.
+manifest, schema and documentation; it does not relicense third-party
+publications. Newsbook article bodies are not redistributed. Publisher
+headlines, URLs and metadata are retained, and copyright remains with Beacon
+Media Group and any other applicable rights holders. The Gazette/legislation
+and Constitution components continue to include source text under their
+applicable permissions and reuse basis. Source access points and attribution
+are listed in `SOURCE_ATTRIBUTION.md`.
 
 ## Versioning and integrity
 
 The component exports were frozen from the authoritative University of Malta
-data stores on 23 July 2026. The release includes a `checksums.sha256` file.
+data stores on 23 July 2026. The Newsbook bodies were replaced with copyright
+notices in September 2026. The release includes a `checksums.sha256` file.
 Verify it from the release directory with:
 
 ```text
